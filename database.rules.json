@@ -1,0 +1,10 @@
+{
+  "rules": {
+    "polla2026": {
+      "state": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}

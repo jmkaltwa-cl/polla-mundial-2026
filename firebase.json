@@ -1,0 +1,23 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "**/*.js",
+      "package.json",
+      "package-lock.json",
+      "polla-data.json"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/polla-completa.html"
+      }
+    ]
+  },
+  "database": {
+    "rules": "database.rules.json"
+  }
+}

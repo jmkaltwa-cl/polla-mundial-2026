@@ -1,0 +1,7 @@
+node_modules/
+pdf-extract.txt
+package-lock.json
+*.log
+.firebase/
+.DS_Store
+Thumbs.db

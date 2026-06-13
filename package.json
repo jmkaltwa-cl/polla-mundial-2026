@@ -1,0 +1,15 @@
+{
+  "name": "polla-mundial-2026",
+  "version": "1.0.0",
+  "description": "Polla familiar Mundial 2026 con ranking, resultados y cartillas",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}
