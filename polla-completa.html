@@ -264,9 +264,10 @@
 
   <!-- ESTADÍSTICAS -->
   <section id="view-estadisticas" class="view">
-    <div class="toolbar statsToolbar">
-      <select id="statsMatch"><option value="">— Elige un partido —</option></select>
-      <input id="statsMatchSearch" placeholder="Buscar partido (ej. Alemania, Curazao)..." />
+    <div class="statsPick" style="margin-bottom:16px">
+      <input id="statsMatchSearch" placeholder="Filtrar por país o equipo (ej. Alemania, México)..." />
+      <div id="statsMatchHint" class="muted" style="font-size:13px;margin-top:6px"></div>
+      <select id="statsMatch" style="margin-top:10px"><option value="">— Elige un partido —</option></select>
     </div>
     <div id="statsMatchHero" class="statsHero"></div>
     <div class="statsGrid">
@@ -637,24 +638,39 @@ function topCounted(counts, limit = 5) {
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'es'))
     .slice(0, limit);
 }
-function resolveStatsMatchId() {
+function matchSearchHaystack(m) {
+  return [m.home, m.away, m.group, String(m.id), m.venue, niceDate(m.date), m.date, m.time].join(' ').toLowerCase();
+}
+function filterStatsMatchSelect() {
   const search = (document.getElementById('statsMatchSearch')?.value || '').trim().toLowerCase();
-  if (search) {
-    const found = DATA.matches.find(m =>
-      [m.home, m.away, m.group, String(m.id), m.venue].join(' ').toLowerCase().includes(search)
-    );
-    if (found) return found.id;
-  }
   const sel = document.getElementById('statsMatch');
-  return Number(sel?.value) || DATA.matches[0]?.id;
+  const hint = document.getElementById('statsMatchHint');
+  if (!sel) return;
+  const prev = sel.value;
+  const all = [...DATA.matches].sort(matchesBySchedule);
+  const matches = search ? all.filter(m => matchSearchHaystack(m).includes(search)) : all;
+  sel.innerHTML = matches.length
+    ? matches.map(m =>
+        `<option value="${m.id}">#${m.id} · ${niceDate(m.date)} ${m.time} · ${m.home} vs ${m.away} · Grupo ${m.group}</option>`
+      ).join('')
+    : '<option value="">— Sin coincidencias —</option>';
+  if (matches.some(m => String(m.id) === prev)) sel.value = prev;
+  else if (matches.length) sel.value = String(matches[0].id);
+  if (hint) {
+    if (!search) hint.textContent = `${all.length} partidos — elige uno en la lista`;
+    else if (!matches.length) hint.textContent = 'No hay partidos con ese criterio. Prueba otro nombre o país.';
+    else hint.textContent = `${matches.length} partido${matches.length !== 1 ? 's' : ''} encontrado${matches.length !== 1 ? 's' : ''} — elige cuál quieres analizar abajo`;
+  }
+}
+function resolveStatsMatchId() {
+  const sel = document.getElementById('statsMatch');
+  const id = Number(sel?.value);
+  return id || DATA.matches[0]?.id;
 }
 function renderEstadisticas() {
   const matchId = resolveStatsMatchId();
   const m = getMatchById(matchId);
   if (!m) return;
-
-  const sel = document.getElementById('statsMatch');
-  if (sel && String(sel.value) !== String(matchId)) sel.value = matchId;
 
   const preds = getPredictionsForMatch(matchId);
   const scores = aggregateByScore(preds);
@@ -836,15 +852,7 @@ function renderFilters() {
   });
   mySel.value = myParticipantId;
   syncFinalSelects();
-
-  const statsSel = document.getElementById('statsMatch');
-  if (statsSel && statsSel.options.length <= 1) {
-    [...DATA.matches].sort(matchesBySchedule).forEach(m => {
-      statsSel.insertAdjacentHTML('beforeend',
-        `<option value="${m.id}">#${m.id} · ${niceDate(m.date)} · ${m.home} vs ${m.away}</option>`);
-    });
-    statsSel.value = DATA.matches[0]?.id || '';
-  }
+  filterStatsMatchSelect();
 }
 
 document.getElementById('importFile').addEventListener('change', async (e) => {
@@ -862,11 +870,12 @@ document.getElementById('importFile').addEventListener('change', async (e) => {
   if (el) el.addEventListener('input', renderMatches);
 });
 document.getElementById('rankSearch').addEventListener('input', renderScoreboard);
-['statsMatch', 'statsMatchSearch', 'statsPredSearch'].forEach(id => {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener('input', renderEstadisticas);
-  if (el && el.tagName === 'SELECT') el.addEventListener('change', renderEstadisticas);
+document.getElementById('statsMatchSearch').addEventListener('input', () => {
+  filterStatsMatchSelect();
+  renderEstadisticas();
 });
+document.getElementById('statsMatch').addEventListener('change', renderEstadisticas);
+document.getElementById('statsPredSearch').addEventListener('input', renderEstadisticas);
 document.getElementById('actualChampion').addEventListener('change', e => { state.actualChampion = e.target.value; saveState(); renderAll(); });
 document.getElementById('actualRunner').addEventListener('change', e => { state.actualRunner = e.target.value; saveState(); renderAll(); });
 document.getElementById('myParticipant').addEventListener('change', e => {
