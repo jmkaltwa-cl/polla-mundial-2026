@@ -119,6 +119,28 @@
     .ptsBadge{font-weight:900; text-align:center;}
     .syncStatus{font-size:12px; color:var(--muted); margin-top:8px;}
     .syncStatus.ok{color:#86efac;}
+    .statsToolbar{grid-template-columns:1.2fr 1fr; margin-bottom:16px;}
+    .statsGrid{display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start;}
+    .statsHero{padding:16px; border:1px solid var(--line); border-radius:18px; background:rgba(255,255,255,.04); margin-bottom:16px;}
+    .statsHero h3{margin:0 0 6px; font-size:clamp(18px,3vw,24px);}
+    .statCards{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin:12px 0;}
+    .statCard{padding:14px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.04); text-align:center;}
+    .statCard b{display:block; font-size:24px; margin-bottom:4px;}
+    .statCard span{font-size:12px; color:var(--muted);}
+    .barRow{display:grid; grid-template-columns:56px 1fr 46px; gap:8px; align-items:center; margin:8px 0; font-size:13px;}
+    .barTrack{height:10px; background:rgba(255,255,255,.08); border-radius:999px; overflow:hidden;}
+    .barFill{height:100%; background:linear-gradient(90deg,#16a34a,#0284c7); border-radius:999px;}
+    .statsPredWrap{max-height:52vh; overflow:auto; border:1px solid var(--line); border-radius:16px;}
+    .statsPredRow{display:grid; grid-template-columns:1fr auto; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); font-size:13px; align-items:center;}
+    .statsPredRow.head{font-weight:800; color:var(--muted); font-size:11px; text-transform:uppercase; background:rgba(0,0,0,.15); position:sticky; top:0; z-index:1;}
+    .statsGroupHead{display:flex; justify-content:space-between; gap:8px; padding:10px 12px; background:rgba(56,189,248,.08); border-bottom:1px solid var(--line); font-weight:900; font-size:13px;}
+    .statsGroupHead.top{background:rgba(34,197,94,.12);}
+    .outcomePills{display:flex; flex-wrap:wrap; gap:8px; margin:10px 0;}
+    .outcomePill{padding:8px 12px; border-radius:999px; border:1px solid var(--line); font-size:13px; font-weight:800;}
+    .outcomePill.top{border-color:rgba(34,197,94,.5); background:rgba(34,197,94,.12);}
+    .curioList{display:grid; gap:10px;}
+    .curioItem{padding:12px 14px; border:1px solid var(--line); border-radius:14px; background:rgba(255,255,255,.04); font-size:14px; line-height:1.45;}
+    .curioItem b{color:var(--accent2);}
     html{scroll-behavior:smooth; -webkit-text-size-adjust:100%;}
     input, select, button{font-size:16px;}
     @media(max-width:980px){
@@ -126,12 +148,14 @@
       .toolbar{grid-template-columns:1fr 1fr;}
       .layout{grid-template-columns:1fr}
       .match{grid-template-columns:1fr}
+      .statsGrid{grid-template-columns:1fr}
     }
     @media(max-width:560px){
       .wrap{padding:12px;}
       .hero{padding:20px;}
       .cards{grid-template-columns:1fr;}
       .toolbar{grid-template-columns:1fr;}
+      .statsToolbar{grid-template-columns:1fr;}
       .cartillaRow{grid-template-columns:28px 1fr 72px 50px; font-size:12px;}
       .finalBox{grid-template-columns:1fr}
       h1{font-size:32px;}
@@ -164,6 +188,7 @@
     <button class="tab active" data-view="ranking" role="tab">🏆 Ranking</button>
     <button class="tab" data-view="resultados" role="tab">⚽ Resultados</button>
     <button class="tab" data-view="cartilla" role="tab">📋 Mi Cartilla</button>
+    <button class="tab" data-view="estadisticas" role="tab">📊 Estadísticas</button>
   </nav>
 
   <!-- RANKING -->
@@ -235,6 +260,42 @@
       <div id="cartillaEmpty" class="muted">Selecciona tu nombre para ver tu cartilla con todos tus pronósticos y puntaje actual.</div>
       <div id="cartillaContent" class="hidden"></div>
     </section>
+  </section>
+
+  <!-- ESTADÍSTICAS -->
+  <section id="view-estadisticas" class="view">
+    <div class="toolbar statsToolbar">
+      <select id="statsMatch"><option value="">— Elige un partido —</option></select>
+      <input id="statsMatchSearch" placeholder="Buscar partido (ej. Alemania, Curazao)..." />
+    </div>
+    <div id="statsMatchHero" class="statsHero"></div>
+    <div class="statsGrid">
+      <section class="panel">
+        <h2>Marcadores más repetidos</h2>
+        <div id="statsScoreBars"></div>
+      </section>
+      <section class="panel">
+        <h2>¿Quién gana según la polla?</h2>
+        <div id="statsOutcomes"></div>
+      </section>
+    </div>
+    <section class="panel" style="margin-top:16px">
+      <h2>Pronósticos de todos</h2>
+      <div class="rankSearchBar">
+        <input id="statsPredSearch" placeholder="Filtrar por nombre del participante..." />
+      </div>
+      <div id="statsPredList" class="statsPredWrap"></div>
+    </section>
+    <div class="statsGrid" style="margin-top:16px">
+      <section class="panel">
+        <h2>Final del torneo — consenso</h2>
+        <div id="statsFinal"></div>
+      </section>
+      <section class="panel">
+        <h2>Curiosidades de la polla</h2>
+        <div id="statsCurios" class="curioList"></div>
+      </section>
+    </div>
   </section>
 </div>
 
@@ -532,11 +593,199 @@ function renderCartilla() {
   }
   content.innerHTML = html;
 }
+function getMatchById(id) {
+  return DATA.matches.find(m => m.id === Number(id));
+}
+function getPredictionsForMatch(matchId) {
+  const idx = DATA.matches.findIndex(m => m.id === Number(matchId));
+  if (idx < 0) return [];
+  return DATA.participants
+    .filter(p => {
+      const pred = p.predictions && p.predictions[idx];
+      return pred && pred.ph != null && pred.pa != null;
+    })
+    .map(p => {
+      const pred = p.predictions[idx];
+      const ph = Number(pred.ph), pa = Number(pred.pa);
+      return {
+        id: p.id, name: p.name, short: p.short || participantInitials(p),
+        ph, pa, score: `${ph}-${pa}`, outcome: outcome(ph, pa)
+      };
+    });
+}
+function aggregateByScore(preds) {
+  const counts = {};
+  preds.forEach(p => { counts[p.score] = (counts[p.score] || 0) + 1; });
+  return Object.entries(counts)
+    .map(([score, count]) => ({ score, count, pct: preds.length ? (count / preds.length * 100) : 0 }))
+    .sort((a, b) => b.count - a.count || a.score.localeCompare(b.score));
+}
+function aggregateOutcomes(preds, home, away) {
+  const labels = { H: home, D: 'Empate', A: away };
+  const counts = { H: 0, D: 0, A: 0 };
+  preds.forEach(p => { counts[p.outcome]++; });
+  return Object.entries(counts)
+    .map(([key, count]) => ({
+      key, label: labels[key], count,
+      pct: preds.length ? (count / preds.length * 100) : 0
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+function topCounted(counts, limit = 5) {
+  return Object.entries(counts)
+    .map(([label, count]) => ({ label, count, pct: 0 }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'es'))
+    .slice(0, limit);
+}
+function resolveStatsMatchId() {
+  const search = (document.getElementById('statsMatchSearch')?.value || '').trim().toLowerCase();
+  if (search) {
+    const found = DATA.matches.find(m =>
+      [m.home, m.away, m.group, String(m.id), m.venue].join(' ').toLowerCase().includes(search)
+    );
+    if (found) return found.id;
+  }
+  const sel = document.getElementById('statsMatch');
+  return Number(sel?.value) || DATA.matches[0]?.id;
+}
+function renderEstadisticas() {
+  const matchId = resolveStatsMatchId();
+  const m = getMatchById(matchId);
+  if (!m) return;
+
+  const sel = document.getElementById('statsMatch');
+  if (sel && String(sel.value) !== String(matchId)) sel.value = matchId;
+
+  const preds = getPredictionsForMatch(matchId);
+  const scores = aggregateByScore(preds);
+  const outcomes = aggregateOutcomes(preds, m.home, m.away);
+  const actual = state.results[String(m.id)] || { h: '', a: '' };
+  const played = actual.h !== '' && actual.a !== '' && actual.h != null && actual.a != null;
+  const top = scores[0];
+  const avgHome = preds.length ? (preds.reduce((s, p) => s + p.ph, 0) / preds.length).toFixed(1) : '—';
+  const avgAway = preds.length ? (preds.reduce((s, p) => s + p.pa, 0) / preds.length).toFixed(1) : '—';
+  const uniqueScores = scores.length;
+
+  let realNote = '';
+  if (played) {
+    const realScore = `${actual.h}-${actual.a}`;
+    const exactCount = preds.filter(p => p.score === realScore).length;
+    const hitCount = preds.filter(p => outcome(Number(actual.h), Number(actual.a)) === p.outcome).length;
+    realNote = `<div class="sub" style="margin-top:10px">Resultado real: <b>${realScore}</b> · ${exactCount} acertaron exacto · ${hitCount} acertaron ganador/empate</div>`;
+  }
+
+  document.getElementById('statsMatchHero').innerHTML = `
+    <h3>${flag(m.home)} ${m.home} vs ${m.away} ${flag(m.away)}</h3>
+    <div class="sub">Grupo ${m.group} · #${m.id} · ${niceDate(m.date)} ${m.time} · ${preds.length} pronósticos</div>
+    <div class="statCards">
+      <div class="statCard"><b>${top ? top.score : '—'}</b><span>Marcador más repetido${top ? ` (${top.count} · ${top.pct.toFixed(0)}%)` : ''}</span></div>
+      <div class="statCard"><b>${uniqueScores}</b><span>Marcadores distintos</span></div>
+      <div class="statCard"><b>${avgHome} – ${avgAway}</b><span>Promedio de goles</span></div>
+      <div class="statCard"><b style="font-size:clamp(14px,2.2vw,20px);line-height:1.2">${outcomes[0]?.label || '—'}</b><span>Favorito (${outcomes[0] ? outcomes[0].pct.toFixed(0) + '%' : '—'})</span></div>
+    </div>
+    ${realNote}`;
+
+  const maxCount = scores[0]?.count || 1;
+  document.getElementById('statsScoreBars').innerHTML = scores.length
+    ? scores.slice(0, 12).map((s, i) => `
+        <div class="barRow">
+          <b>${s.score}</b>
+          <div class="barTrack"><div class="barFill" style="width:${(s.count / maxCount * 100).toFixed(1)}%"></div></div>
+          <span class="muted">${s.count} (${s.pct.toFixed(0)}%)</span>
+        </div>`).join('')
+    : '<p class="muted">Sin pronósticos para este partido.</p>';
+
+  document.getElementById('statsOutcomes').innerHTML = preds.length
+    ? `<div class="outcomePills">${outcomes.map((o, i) =>
+        `<span class="outcomePill ${i === 0 ? 'top' : ''}">${o.label}: ${o.count} (${o.pct.toFixed(0)}%)</span>`
+      ).join('')}</div>
+      <p class="muted" style="margin:0;font-size:13px">Cuántos participantes pronosticaron victoria de cada bando o empate.</p>`
+    : '<p class="muted">Sin pronósticos.</p>';
+
+  const q = (document.getElementById('statsPredSearch')?.value || '').trim().toLowerCase();
+  const filteredPreds = q ? preds.filter(p =>
+    p.name.toLowerCase().includes(q) || p.short.toLowerCase().includes(q)
+  ) : preds;
+  const groups = aggregateByScore(filteredPreds);
+  let predHtml = '<div class="statsPredRow head"><span>Participante</span><span>Marcador</span></div>';
+  if (!filteredPreds.length) {
+    predHtml += '<div class="statsPredRow"><span class="muted">Nadie coincide con ese filtro.</span><span></span></div>';
+  } else {
+    groups.forEach((g, gi) => {
+      const members = filteredPreds.filter(p => p.score === g.score)
+        .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      predHtml += `<div class="statsGroupHead ${gi === 0 ? 'top' : ''}"><span>${g.score}</span><span>${g.count} persona${g.count !== 1 ? 's' : ''} · ${g.pct.toFixed(0)}%</span></div>`;
+      members.forEach(p => {
+        predHtml += `<div class="statsPredRow"><span><b>${p.name}</b> <span class="muted">${p.short}</span></span><span><b>${p.score}</b></span></div>`;
+      });
+    });
+  }
+  document.getElementById('statsPredList').innerHTML = predHtml;
+
+  const champCounts = {}, runnerCounts = {}, comboCounts = {};
+  DATA.participants.forEach(p => {
+    if (p.champion) champCounts[p.champion] = (champCounts[p.champion] || 0) + 1;
+    if (p.runnerUp) runnerCounts[p.runnerUp] = (runnerCounts[p.runnerUp] || 0) + 1;
+    if (p.champion && p.runnerUp) {
+      const k = `${p.champion} / ${p.runnerUp}`;
+      comboCounts[k] = (comboCounts[k] || 0) + 1;
+    }
+  });
+  const total = DATA.participants.length;
+  const fmtTop = (items) => items.map(i =>
+    `<div class="barRow"><span>${DATA.emojis[i.label] || ''} ${i.label}</span><div class="barTrack"><div class="barFill" style="width:${(i.count / (items[0]?.count || 1) * 100).toFixed(1)}%"></div></div><span class="muted">${i.count}</span></div>`
+  ).join('');
+  const topChamps = topCounted(champCounts).map(x => ({ ...x, pct: x.count / total * 100 }));
+  const topRunners = topCounted(runnerCounts).map(x => ({ ...x, pct: x.count / total * 100 }));
+  const topCombos = topCounted(comboCounts, 3);
+  document.getElementById('statsFinal').innerHTML = `
+    <div class="sub" style="margin-bottom:10px">Campeón más votado</div>${fmtTop(topChamps) || '<p class="muted">—</p>'}
+    <div class="sub" style="margin:14px 0 10px">Subcampeón más votado</div>${fmtTop(topRunners) || '<p class="muted">—</p>'}
+    <div class="sub" style="margin:14px 0 10px">Final exacta más repetida</div>
+    ${topCombos.length ? topCombos.map(c => `<div class="curioItem">🏆 ${c.label} <span class="muted">(${c.count} personas)</span></div>`).join('') : '<p class="muted">—</p>'}`;
+
+  const curios = [];
+  let maxConsensus = { pct: 0 }, maxSplit = { unique: 0 };
+  DATA.matches.forEach(match => {
+    const mp = getPredictionsForMatch(match.id);
+    if (!mp.length) return;
+    const sc = aggregateByScore(mp);
+    const consensus = sc[0].count / mp.length * 100;
+    if (consensus > maxConsensus.pct) maxConsensus = { pct: consensus, score: sc[0].score, match, count: sc[0].count };
+    if (sc.length > maxSplit.unique) maxSplit = { unique: sc.length, match };
+  });
+  if (maxConsensus.match) {
+    curios.push(`<div class="curioItem"><b>Más consenso:</b> en ${maxConsensus.match.home} vs ${maxConsensus.match.away}, el ${maxConsensus.score} lo pusieron ${maxConsensus.count} personas (${maxConsensus.pct.toFixed(0)}%).</div>`);
+  }
+  if (maxSplit.match) {
+    curios.push(`<div class="curioItem"><b>Más dividido:</b> ${maxSplit.match.home} vs ${maxSplit.match.away} tiene ${maxSplit.unique} marcadores distintos.</div>`);
+  }
+  const drawKings = DATA.participants.map(p => {
+    const draws = (p.predictions || []).filter((pred, idx) => pred && Number(pred.ph) === Number(pred.pa)).length;
+    return { name: p.name, draws };
+  }).sort((a, b) => b.draws - a.draws)[0];
+  if (drawKings?.draws) {
+    curios.push(`<div class="curioItem"><b>Rey del empate:</b> ${drawKings.name} pronosticó ${drawKings.draws} empates en total.</div>`);
+  }
+  const optimist = DATA.participants.map(p => {
+    const preds = (p.predictions || []).filter(Boolean);
+    const avg = preds.length ? preds.reduce((s, pred) => s + Number(pred.ph) + Number(pred.pa), 0) / preds.length : 0;
+    return { name: p.name, avg };
+  }).sort((a, b) => b.avg - a.avg)[0];
+  if (optimist?.avg) {
+    curios.push(`<div class="curioItem"><b>Más goleador:</b> ${optimist.name} promedia ${optimist.avg.toFixed(1)} goles por partido en sus pronósticos.</div>`);
+  }
+  if (topChamps[0]) {
+    curios.push(`<div class="curioItem"><b>Campeón favorito de la familia:</b> ${topChamps[0].label} (${topChamps[0].count} votos, ${topChamps[0].pct.toFixed(0)}%).</div>`);
+  }
+  document.getElementById('statsCurios').innerHTML = curios.join('') || '<p class="muted">Aún no hay datos suficientes.</p>';
+}
 function renderAll() {
   renderStats();
   renderScoreboard();
   renderMatches();
   renderCartilla();
+  renderEstadisticas();
 }
 function setResult(id, side, val) {
   const key = String(id);
@@ -587,6 +836,15 @@ function renderFilters() {
   });
   mySel.value = myParticipantId;
   syncFinalSelects();
+
+  const statsSel = document.getElementById('statsMatch');
+  if (statsSel && statsSel.options.length <= 1) {
+    [...DATA.matches].sort(matchesBySchedule).forEach(m => {
+      statsSel.insertAdjacentHTML('beforeend',
+        `<option value="${m.id}">#${m.id} · ${niceDate(m.date)} · ${m.home} vs ${m.away}</option>`);
+    });
+    statsSel.value = DATA.matches[0]?.id || '';
+  }
 }
 
 document.getElementById('importFile').addEventListener('change', async (e) => {
@@ -604,6 +862,11 @@ document.getElementById('importFile').addEventListener('change', async (e) => {
   if (el) el.addEventListener('input', renderMatches);
 });
 document.getElementById('rankSearch').addEventListener('input', renderScoreboard);
+['statsMatch', 'statsMatchSearch', 'statsPredSearch'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', renderEstadisticas);
+  if (el && el.tagName === 'SELECT') el.addEventListener('change', renderEstadisticas);
+});
 document.getElementById('actualChampion').addEventListener('change', e => { state.actualChampion = e.target.value; saveState(); renderAll(); });
 document.getElementById('actualRunner').addEventListener('change', e => { state.actualRunner = e.target.value; saveState(); renderAll(); });
 document.getElementById('myParticipant').addEventListener('change', e => {
