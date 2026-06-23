@@ -70,6 +70,20 @@
     th{color:#b8c9df; font-size:11px; text-transform:uppercase; letter-spacing:.06em; position:sticky; top:0; background:#122643; z-index:2;}
     tr.leader td{background:rgba(34,197,94,.10);}
     tr.me td{background:rgba(56,189,248,.08);}
+    tr.podium-gold td{background:linear-gradient(90deg, rgba(251,191,36,.20), rgba(251,191,36,.06));}
+    tr.podium-silver td{background:linear-gradient(90deg, rgba(203,213,225,.18), rgba(203,213,225,.05));}
+    tr.podium-bronze td{background:linear-gradient(90deg, rgba(217,119,6,.18), rgba(217,119,6,.05));}
+    tr.podium-gold td:first-child{box-shadow:inset 4px 0 0 #fbbf24;}
+    tr.podium-silver td:first-child{box-shadow:inset 4px 0 0 #cbd5e1;}
+    tr.podium-bronze td:first-child{box-shadow:inset 4px 0 0 #d97706;}
+    tr.podium-gold .rank{color:#fde68a;}
+    tr.podium-silver .rank{color:#e2e8f0;}
+    tr.podium-bronze .rank{color:#fdba74;}
+    .podiumLegend{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:12px; font-size:12px;}
+    .podiumLegend span{display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,.04);}
+    .podiumLegend .dot{width:10px; height:10px; border-radius:50%;}
+    .dot-gold{background:#fbbf24;} .dot-silver{background:#cbd5e1;} .dot-bronze{background:#d97706;}
+    .provisionalTag{display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:800; background:rgba(251,191,36,.15); color:#fde68a; border:1px solid rgba(251,191,36,.35);}
     .rank{font-weight:900; color:var(--warn);}
     .rules{display:grid; gap:8px; color:#cbdaf0; font-size:14px;}
     .rules b{color:white}
@@ -207,7 +221,9 @@
           <div>Final exacta: <b>10 pts</b></div>
           <div>Solo campeón: <b>5 pts</b> · Solo subcampeón: <b>3 pts</b></div>
           <div>Ambos finalistas en mal orden: <b>2 pts</b> · Un finalista: <b>1 pt</b></div>
-          <div>Empate: gana quien tenga <b>más exactos</b>.</div>
+          <div>Desempate: <b>1)</b> más exactos · <b>2)</b> más puntos sin final.</div>
+          <div>Podio: <b>oro / plata / bronce</b> según reglas de premios.</div>
+          <div>Cuota: <b>$5.000</b> por participante.</div>
           <div>En Pts, <b>7+0</b> = 7 de partidos + 0 de la final.</div>
         </div>
         <div class="actions">
@@ -222,13 +238,15 @@
       </aside>
       <section class="panel">
         <h2>Tabla de posiciones</h2>
+        <div id="podiumLegend" class="podiumLegend"></div>
+        <div id="podiumPool" class="muted" style="font-size:13px;margin-bottom:12px"></div>
         <div class="rankSearchBar">
           <input id="rankSearch" placeholder="Buscar por nombre o iniciales para ver en qué puesto va..." />
           <div id="rankSearchHint" class="muted" style="font-size:13px;margin-top:6px"></div>
         </div>
         <div class="tableWrap">
           <table>
-            <thead><tr><th>#</th><th>Participante</th><th title="Total = partidos + final">Pts</th><th>Exactos</th><th>Final</th></tr></thead>
+            <thead><tr><th>#</th><th>Participante</th><th title="Total = partidos + final">Pts</th><th>Exactos</th><th>Final</th><th>Premio</th><th>Monto</th></tr></thead>
             <tbody id="scoreBody"></tbody>
           </table>
         </div>
@@ -308,6 +326,7 @@ const POLLA_DATA = {"matches":[{"id":1,"group":"A","home":"México","away":"Sud�
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <script>
 const DATA = POLLA_DATA;
+const ENTRY_FEE = 5000;
 const STORAGE_KEY = 'polla_mundial_2026_familiar_v2';
 const MY_NAME_KEY = 'polla_mundial_2026_my_name';
 const DB_PATH = 'polla2026/state';
@@ -430,7 +449,135 @@ function standings() {
     });
     const fp = finalPoints(p);
     return { id:p.id, name:p.name, short:p.short, points:pts+fp, groupPoints:pts, finalPoints:fp, exacts, hits, champion:p.champion, runnerUp:p.runnerUp };
-  }).sort((a,b) => b.points-a.points || b.exacts-a.exacts || a.name.localeCompare(b.name, 'es'));
+  }).sort((a,b) => b.points-a.points || b.exacts-a.exacts || b.groupPoints-a.groupPoints || a.name.localeCompare(b.name, 'es'));
+}
+function sameStanding(a, b) {
+  return a.points === b.points && a.exacts === b.exacts && a.groupPoints === b.groupPoints;
+}
+function buildRankTiers(rows) {
+  const tiers = [];
+  let i = 0;
+  while (i < rows.length) {
+    const anchor = rows[i];
+    const participants = [];
+    while (i < rows.length && sameStanding(rows[i], anchor)) {
+      participants.push(rows[i]);
+      i++;
+    }
+    tiers.push({ participants, size: participants.length });
+  }
+  let rank = 1;
+  tiers.forEach(t => {
+    t.displayRank = rank;
+    rank += t.size;
+  });
+  return tiers;
+}
+function formatCLP(amount) {
+  return '$' + Math.round(amount).toLocaleString('es-CL');
+}
+function formatPct(pct) {
+  return (pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)) + '%';
+}
+function getPrizeStatus() {
+  const played = Object.values(state.results).filter(r => r && r.h !== '' && r.a !== '').length;
+  const total = DATA.matches.length;
+  const finalOk = !!(state.actualChampion && state.actualRunner);
+  if (!finalOk) return { definitive: false, reason: 'Falta ingresar campeón y subcampeón real del torneo.' };
+  if (played < total) return { definitive: false, reason: `Faltan ${total - played} partidos por anotar (${played}/${total}).` };
+  return { definitive: true, reason: 'Torneo completo: premios definitivos.' };
+}
+function assignPrizePcts(tiers) {
+  const pcts = new Map();
+  if (!tiers.length) return pcts;
+  const set = (list, pct) => list.forEach(p => pcts.set(p.id, pct));
+  const t0 = tiers[0];
+  const t1 = tiers[1] || { size: 0, participants: [] };
+  const t2 = tiers[2] || { size: 0, participants: [] };
+
+  if (t0.size >= 3) {
+    set(t0.participants, 100 / t0.size);
+    return pcts;
+  }
+  if (t0.size === 2) {
+    set(t0.participants, 40);
+    if (t1.size) set(t1.participants, 20 / t1.size);
+    return pcts;
+  }
+  set(t0.participants, 50);
+  if (t1.size >= 2) {
+    set(t1.participants, 50 / t1.size);
+    return pcts;
+  }
+  if (t1.size === 1) {
+    set(t1.participants, 30);
+    if (t2.size) set(t2.participants, 20 / t2.size);
+  }
+  return pcts;
+}
+function assignPodiumMedals(tiers) {
+  const medals = new Map();
+  if (!tiers.length) return medals;
+  const mark = (list, medal) => list.forEach(p => medals.set(p.id, medal));
+  const t0 = tiers[0];
+  const t1 = tiers[1] || { size: 0, participants: [] };
+  const t2 = tiers[2] || { size: 0, participants: [] };
+
+  if (t0.size >= 3) {
+    mark(t0.participants, 'gold');
+    return medals;
+  }
+  if (t0.size === 2) {
+    mark(t0.participants, 'gold');
+    if (t1.size) mark(t1.participants, 'bronze');
+    return medals;
+  }
+  mark(t0.participants, 'gold');
+  if (t1.size >= 2) {
+    mark(t1.participants, 'silver');
+    return medals;
+  }
+  if (t1.size === 1) {
+    mark(t1.participants, 'silver');
+    if (t2.size) mark(t2.participants, 'bronze');
+  }
+  return medals;
+}
+function buildPrizeLegend(rows, prizes, totalPool) {
+  const groups = new Map();
+  rows.forEach(r => {
+    const pr = prizes.get(r.id);
+    if (!pr) return;
+    const key = pr.pct.toFixed(4);
+    if (!groups.has(key)) groups.set(key, { pct: pr.pct, amount: pr.amount, medal: pr.medal, names: [] });
+    groups.get(key).names.push(r.name);
+  });
+  const medalIcon = { gold: '🥇', silver: '🥈', bronze: '🥉' };
+  const chips = [...groups.values()]
+    .sort((a, b) => b.pct - a.pct)
+    .map(g => {
+      const label = g.names.length === 1 ? g.names[0]
+        : g.names.length === 2 ? g.names.join(' y ')
+        : `${g.names.length} personas`;
+      const dot = g.medal ? `<i class="dot dot-${g.medal}"></i>` : '';
+      return `<span>${dot} ${label}: <b>${formatPct(g.pct)}</b> (${formatCLP(g.amount)})</span>`;
+    });
+  return chips.length ? chips.join('') : '<span>Sin premios de podio asignados aún.</span>';
+}
+function getPodiumInfo(rows) {
+  const tiers = buildRankTiers(rows);
+  const ranks = new Map();
+  const totalPool = DATA.participants.length * ENTRY_FEE;
+  tiers.forEach(t => t.participants.forEach(p => {
+    ranks.set(p.id, { rank: t.displayRank, tie: t.size > 1 });
+  }));
+  const medals = assignPodiumMedals(tiers);
+  const pcts = assignPrizePcts(tiers);
+  const prizes = new Map();
+  pcts.forEach((pct, id) => {
+    prizes.set(id, { pct, amount: totalPool * pct / 100, medal: medals.get(id) || null });
+  });
+  return { medals, ranks, prizes, totalPool, tiers };
 }
 function getParticipant(id) {
   return DATA.participants.find(p => String(p.id) === String(id));
@@ -440,8 +587,8 @@ function participantInitials(p) {
 }
 function getLeaders(rows) {
   if (!rows.length || rows[0].points <= 0) return [];
-  const { points, exacts } = rows[0];
-  return rows.filter(r => r.points === points && r.exacts === exacts);
+  const anchor = rows[0];
+  return rows.filter(r => sameStanding(r, anchor));
 }
 function renderStats() {
   const rows = standings();
@@ -467,8 +614,9 @@ function renderStats() {
 
   const my = myParticipantId ? rows.find(r => String(r.id) === String(myParticipantId)) : null;
   if (my) {
-    const pos = rows.findIndex(r => r.id === my.id) + 1;
-    document.getElementById('myRank').textContent = `#${pos}`;
+    const { ranks } = getPodiumInfo(rows);
+    const info = ranks.get(my.id) || { rank: rows.findIndex(r => r.id === my.id) + 1 };
+    document.getElementById('myRank').textContent = `#${info.rank}`;
     document.getElementById('myRankDetail').textContent = `${my.points} pts · ${my.exacts} exactos`;
   } else {
     document.getElementById('myRank').textContent = '—';
@@ -478,29 +626,45 @@ function renderStats() {
 function renderScoreboard() {
   const q = (document.getElementById('rankSearch')?.value || '').trim().toLowerCase();
   const rows = standings();
-  const leaders = getLeaders(rows);
-  const leaderIds = new Set(leaders.map(l => l.id));
+  const { medals, ranks, prizes, totalPool } = getPodiumInfo(rows);
+  const prizeStatus = getPrizeStatus();
+  const medalIcon = { gold: '🥇', silver: '🥈', bronze: '🥉' };
+  const legendEl = document.getElementById('podiumLegend');
+  const poolEl = document.getElementById('podiumPool');
+  if (legendEl) legendEl.innerHTML = buildPrizeLegend(rows, prizes, totalPool);
+  if (poolEl) {
+    const prov = prizeStatus.definitive ? '' : ' <span class="provisionalTag">Provisional</span>';
+    poolEl.innerHTML = `Pozo total: ${formatCLP(totalPool)} · ${DATA.participants.length} participantes × ${formatCLP(ENTRY_FEE)}${prov}<br><span style="font-size:12px">${prizeStatus.definitive ? prizeStatus.reason : '⚠️ ' + prizeStatus.reason + ' Los montos pueden cambiar hasta completar el torneo.'}</span>`;
+  }
   const matches = (r) => !q || r.name.toLowerCase().includes(q) || (r.short || '').toLowerCase().includes(q);
   const filtered = rows.filter(matches);
   const hint = document.getElementById('rankSearchHint');
   if (hint) {
     if (!q) hint.textContent = '';
     else if (filtered.length === 1) {
-      const pos = rows.findIndex(r => r.id === filtered[0].id) + 1;
-      hint.textContent = `${filtered[0].name} está en el puesto #${pos} de ${rows.length}`;
+      const info = ranks.get(filtered[0].id) || { rank: rows.findIndex(r => r.id === filtered[0].id) + 1 };
+      const pr = prizes.get(filtered[0].id);
+      const prizeTxt = pr ? ` · Premio: ${formatPct(pr.pct)} (${formatCLP(pr.amount)})` : '';
+      hint.textContent = `${filtered[0].name} está en el puesto #${info.rank} de ${rows.length}${prizeTxt}`;
     } else hint.textContent = `Mostrando ${filtered.length} de ${rows.length} participantes`;
   }
   const body = document.getElementById('scoreBody');
-  body.innerHTML = rows.map((r, i) => {
+  body.innerHTML = rows.map((r) => {
     if (!matches(r)) return '';
     const isMe = String(r.id) === String(myParticipantId);
-    return `<tr class="${leaderIds.has(r.id) ? 'leader' : ''} ${isMe ? 'me' : ''}">
-      <td class="rank">${i + 1}</td>
+    const medal = medals.get(r.id);
+    const pr = prizes.get(r.id);
+    const info = ranks.get(r.id) || { rank: 1, tie: false };
+    const rankLabel = info.tie ? `${info.rank}°=` : `${info.rank}°`;
+    return `<tr class="${medal ? 'podium-' + medal : ''} ${isMe ? 'me' : ''}">
+      <td class="rank">${medal ? medalIcon[medal] + ' ' : ''}${rankLabel}</td>
       <td><b>${r.name}</b>${r.short ? ` <span class="muted">(${r.short})</span>` : ''}<br>
         <span class="muted">${r.champion ? '🏆 ' + r.champion + ' · 🥈 ' + r.runnerUp : 'Sin final'}</span></td>
       <td><b>${r.points}</b><br><span class="muted" title="Puntos de partidos + puntos de la final">${r.groupPoints} partidos + ${r.finalPoints} final</span></td>
       <td><b>${r.exacts}</b><br><span class="muted">${r.hits} aciertos</span></td>
       <td>${r.finalPoints || '—'}</td>
+      <td>${pr ? `<b>${formatPct(pr.pct)}</b>${prizeStatus.definitive ? '' : '<br><span class="muted" style="font-size:11px">provisional</span>'}` : '<span class="muted">—</span>'}</td>
+      <td>${pr ? `<b>${formatCLP(pr.amount)}</b>${prizeStatus.definitive ? '' : '<br><span class="muted" style="font-size:11px">provisional</span>'}` : '<span class="muted">—</span>'}</td>
     </tr>`;
   }).join('');
 }
