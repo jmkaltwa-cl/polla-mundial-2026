@@ -234,7 +234,7 @@
         </div>
         <input id="importFile" type="file" accept="application/json" class="hidden" />
         <div id="syncStatus" class="syncStatus">Almacenamiento local activo</div>
-        <div class="footer">Horarios en hora Chile. <span id="participantCountFooter"></span> participantes.</div>
+        <div class="footer">Horarios en hora Chile. <span id="participantCountFooter"></span> participantes. · App <span id="appVersion"></span></div>
       </aside>
       <section class="panel">
         <h2>Tabla de posiciones</h2>
@@ -327,6 +327,7 @@ const POLLA_DATA = {"matches":[{"id":1,"group":"A","home":"México","away":"Sud�
 <script>
 const DATA = POLLA_DATA;
 const ENTRY_FEE = 5000;
+const APP_VERSION = '2026.06.23b';
 const STORAGE_KEY = 'polla_mundial_2026_familiar_v2';
 const MY_NAME_KEY = 'polla_mundial_2026_my_name';
 const DB_PATH = 'polla2026/state';
@@ -611,6 +612,8 @@ function renderStats() {
   document.getElementById('finalStatus').textContent = (state.actualChampion && state.actualRunner) ? 'Ingresada' : 'Pendiente';
   document.getElementById('participantCount').textContent = DATA.participants.length;
   document.getElementById('participantCountFooter').textContent = DATA.participants.length;
+  const verEl = document.getElementById('appVersion');
+  if (verEl) verEl.textContent = 'v' + APP_VERSION;
 
   const my = myParticipantId ? rows.find(r => String(r.id) === String(myParticipantId)) : null;
   if (my) {
